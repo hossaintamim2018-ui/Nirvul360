@@ -37,6 +37,9 @@ export function IntegrationsModal({ isOpen, onClose, user, onSuccess }: Integrat
   const [waPhoneNumberId, setWaPhoneNumberId] = useState('');
   const [waAccessToken, setWaAccessToken] = useState('');
 
+  // Image option state
+  const [importImages, setImportImages] = useState(true);
+
   if (!isOpen) return null;
 
   const role = user?.role || 'accountant';
@@ -73,6 +76,7 @@ export function IntegrationsModal({ isOpen, onClose, user, onSuccess }: Integrat
         store_url: storeUrl,
         api_key: storeApiKey,
         api_secret: storeApiSecret,
+        import_images: importImages,
       });
       onSuccess(res.message || `Successfully pulled ${res.pulled_count || 0} inventory items!`);
       onClose();
@@ -288,6 +292,24 @@ export function IntegrationsModal({ isOpen, onClose, user, onSuccess }: Integrat
                   />
                 </div>
               )}
+
+              {/* Import Product Images Option */}
+              <div className="p-3 bg-[#FAFCF9] border border-[#CAE4D8] rounded-xl flex items-center justify-between">
+                <div>
+                  <span className="text-xs font-bold text-[#025033] block">Import Product Images</span>
+                  <span className="text-[10px] text-[#3A8067]">Extract photos from website for visual POS grid</span>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                  <input
+                    type="checkbox"
+                    checked={importImages}
+                    disabled={isBlocked}
+                    onChange={(e) => setImportImages(e.target.checked)}
+                    className="sr-only peer"
+                  />
+                  <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#025033]"></div>
+                </label>
+              </div>
 
               <div className="pt-2 flex items-center gap-2">
                 <button

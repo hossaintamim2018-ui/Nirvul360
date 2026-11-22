@@ -90,6 +90,7 @@ CREATE TABLE IF NOT EXISTS products (
   sku           TEXT,
   name          TEXT NOT NULL,
   selling_price BIGINT,
+  image_url     TEXT,
   active        BOOLEAN NOT NULL DEFAULT TRUE,
   source        TEXT NOT NULL,
   created_by    TEXT NOT NULL,

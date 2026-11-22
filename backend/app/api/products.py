@@ -32,6 +32,7 @@ class CreateProductInput(BaseModel):
     purchase_price: Optional[float] = None
     stock_qty: Optional[int] = 0
     active: Optional[bool] = True
+    image_url: Optional[str] = None
 
 class UpdateStatusInput(BaseModel):
     active: bool
@@ -136,6 +137,7 @@ async def list_products(
             "cost_price": None if hide_cost else cost,
             "stock_qty": stock,
             "active": bool(p.get("active", 1)),
+            "image_url": p.get("image_url"),
             "external_id": p.get("external_id"),
             "source": p.get("source") or "manual",
             "margin": None if (hide_cost or hide_margin) else margin,
@@ -172,11 +174,17 @@ async def create_inventory_item(
         "purchase_price": cost_poisha,
         "stock_qty": data.stock_qty or 0,
         "active": data.active if data.active is not None else True,
+        "image_url": (data.image_url.strip() if data.image_url else None),
     }, ctx)
 
-    # Ensure active flag is saved
+    # Ensure active flag and image_url are saved
+    update_patch = {}
     if data.active is not None:
-        update("products", p_id, {"active": bool(data.active)})
+        update_patch["active"] = bool(data.active)
+    if data.image_url is not None:
+        update_patch["image_url"] = data.image_url.strip() or None
+    if update_patch:
+        update("products", p_id, update_patch)
 
     log_audit(
         merchant_id=m_id,

@@ -64,7 +64,7 @@ def upsert_product(merchant_id: int, data: Dict[str, Any], ctx: Dict[str, Any]) 
         if existing:
             product_id = existing['id']
             changes = {}
-            for k in ['name', 'sku', 'selling_price']:
+            for k in ['name', 'sku', 'selling_price', 'image_url']:
                 if data.get(k) is not None and data[k] != existing.get(k):
                     changes[k] = data[k]
             if changes:
@@ -79,6 +79,7 @@ def upsert_product(merchant_id: int, data: Dict[str, Any], ctx: Dict[str, Any]) 
                 'sku': data.get('sku'),
                 'name': data['name'],
                 'selling_price': data.get('selling_price'),
+                'image_url': data.get('image_url'),
                 'source': source,
                 'created_by': actor,
                 'created_at': now_iso(),

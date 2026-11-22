@@ -61,6 +61,27 @@ export function PosView({ user, onRefresh, counterName, merchantName, showToast 
   const [openingCashInput, setOpeningCashInput] = useState('5000');
   const [openingCashAmount, setOpeningCashAmount] = useState<number | null>(null);
 
+  // Website Pull & Image Option State
+  const [pullWebsiteModalOpen, setPullWebsiteModalOpen] = useState(false);
+  const [pullWebsitePlatform, setPullWebsitePlatform] = useState<'wordpress' | 'shopify' | 'laravel' | 'daraz' | 'custom'>('wordpress');
+  const [pullWebsiteUrl, setPullWebsiteUrl] = useState('');
+  const [pullWebsiteApiKey, setPullWebsiteApiKey] = useState('');
+  const [pullWebsiteApiSecret, setPullWebsiteApiSecret] = useState('');
+  const [importImages, setImportImages] = useState(true);
+  const [isPullingWebsite, setIsPullingWebsite] = useState(false);
+  const [showImagesInGrid, setShowImagesInGrid] = useState(true);
+  const [imagePreviewModal, setImagePreviewModal] = useState<{
+    url: string;
+    name: string;
+    sku?: string;
+    price?: number;
+    stock?: number;
+    product?: PosProductItem;
+  } | null>(null);
+  const [editImageProduct, setEditImageProduct] = useState<PosProductItem | null>(null);
+  const [editImageUrlInput, setEditImageUrlInput] = useState('');
+  const [isSavingImage, setIsSavingImage] = useState(false);
+
   // Camera Barcode Scanner State (PDF Requirement 14)
   const [cameraScanModalOpen, setCameraScanModalOpen] = useState(false);
   const [cameraScanFeedback, setCameraScanFeedback] = useState<string | null>(null);
@@ -122,7 +143,7 @@ export function PosView({ user, onRefresh, counterName, merchantName, showToast 
     setLoading(true);
     Promise.all([fetchProducts(), fetchOrders()]).finally(() => setLoading(false));
 
-    // Check opening cash for today (PDF Requirement 14)
+    // Check opening cash and image preferences for today (PDF Requirement 14)
     if (typeof window !== 'undefined') {
       const todayKey = 'nirvul_pos_opening_cash_' + new Date().toISOString().slice(0, 10);
       const saved = localStorage.getItem(todayKey);
@@ -131,8 +152,80 @@ export function PosView({ user, onRefresh, counterName, merchantName, showToast 
       } else {
         setOpeningCashModalOpen(true);
       }
+
+      const savedImgPref = localStorage.getItem('nirvul_pos_show_images');
+      if (savedImgPref !== null) {
+        setShowImagesInGrid(savedImgPref === 'true');
+      }
     }
   }, []);
+
+  const handleToggleShowImages = () => {
+    setShowImagesInGrid(prev => {
+      const next = !prev;
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('nirvul_pos_show_images', String(next));
+      }
+      return next;
+    });
+  };
+
+  const handlePullFromWebsite = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    setIsPullingWebsite(true);
+    try {
+      const res = await api.post<{ ok: boolean; platform: string; pulled_count: number; message: string }>(
+        '/api/pos/pull-website',
+        {
+          platform: pullWebsitePlatform,
+          store_url: pullWebsiteUrl.trim() || undefined,
+          api_key: pullWebsiteApiKey.trim() || undefined,
+          api_secret: pullWebsiteApiSecret.trim() || undefined,
+          import_images: importImages,
+        }
+      );
+      if (showToast) {
+        showToast(
+          res.message || `Successfully pulled ${res.pulled_count} products from website with image support!`,
+          'success'
+        );
+      }
+      setPullWebsiteModalOpen(false);
+      await fetchProducts();
+      if (onRefresh) onRefresh();
+    } catch (err: any) {
+      console.error('Failed to pull from website', err);
+      if (showToast) {
+        showToast(err.message || 'Failed to pull inventory from website', 'error');
+      }
+    } finally {
+      setIsPullingWebsite(false);
+    }
+  };
+
+  const handleSaveProductImage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editImageProduct) return;
+    setIsSavingImage(true);
+    try {
+      await api.patch(`/api/pos/products/${editImageProduct.id}/image`, {
+        image_url: editImageUrlInput.trim() || null,
+      });
+      if (showToast) {
+        showToast(`Product image updated for ${editImageProduct.name}`, 'success');
+      }
+      setEditImageProduct(null);
+      setEditImageUrlInput('');
+      await fetchProducts();
+    } catch (err: any) {
+      console.error('Failed to update product image', err);
+      if (showToast) {
+        showToast(err.message || 'Failed to update image', 'error');
+      }
+    } finally {
+      setIsSavingImage(false);
+    }
+  };
 
   const handleSaveOpeningCash = (e: React.FormEvent) => {
     e.preventDefault();
@@ -323,6 +416,16 @@ export function PosView({ user, onRefresh, counterName, merchantName, showToast 
             </span>
           </button>
 
+          {/* Pull from Website with Image Option */}
+          <button
+            type="button"
+            onClick={() => setPullWebsiteModalOpen(true)}
+            className="px-3.5 py-2 text-xs font-bold text-[#025033] bg-white border border-[#CAE4D8] rounded-xl hover:bg-[#E6F7EF] transition-colors shadow-2xs flex items-center gap-1.5"
+            title="Pull products & images from external website"
+          >
+            <span>🌐 Pull Website</span>
+          </button>
+
           <button
             type="button"
             onClick={() => setIsSalesModalOpen(true)}
@@ -355,7 +458,7 @@ export function PosView({ user, onRefresh, counterName, merchantName, showToast 
         {/* Left Panel (~65% width: 8 of 12 columns on lg) */}
         <div className="lg:col-span-8 space-y-6">
           <div className="bg-white rounded-2xl border border-[#E5EAE7] shadow-2xs overflow-hidden">
-            {/* Counter Sale Subheader with Camera Barcode Scanner (PDF Requirement 14) */}
+            {/* Counter Sale Subheader with Camera Barcode Scanner & Image View Options */}
             <div className="p-5 border-b border-[#E5EAE7] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-[#FAFCF9]">
               <div>
                 <h2 className="text-base font-extrabold text-[#025033]">Counter Register</h2>
@@ -363,8 +466,8 @@ export function PosView({ user, onRefresh, counterName, merchantName, showToast 
                   Sale POS-{nextSalePreview} · started {startTime} · scan or tap products
                 </p>
               </div>
-              <div className="flex items-center gap-2 w-full sm:w-auto">
-                <div className="relative flex-1 sm:w-64">
+              <div className="flex items-center gap-2 w-full sm:w-auto flex-wrap">
+                <div className="relative flex-1 sm:w-52">
                   <input
                     ref={searchInputRef}
                     type="text"
@@ -377,6 +480,21 @@ export function PosView({ user, onRefresh, counterName, merchantName, showToast 
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                   </svg>
                 </div>
+
+                {/* Product Images View Toggle Option */}
+                <button
+                  type="button"
+                  onClick={handleToggleShowImages}
+                  className={`px-3 py-1.5 border rounded-xl text-xs font-bold flex items-center gap-1.5 shrink-0 transition ${
+                    showImagesInGrid
+                      ? 'bg-[#E6F7EF] text-[#025033] border-[#CAE4D8] hover:bg-[#CAE4D8]'
+                      : 'bg-white text-[#6B7280] border-[#E5EAE7] hover:bg-[#F9FAF8]'
+                  }`}
+                  title="Toggle product images on/off in POS counter grid"
+                >
+                  <span>{showImagesInGrid ? '🖼️ Images: ON' : '🖼️ Images: OFF'}</span>
+                </button>
+
                 {/* Camera Barcode Scan Trigger (PDF Requirement 14) */}
                 <button
                   type="button"
@@ -385,6 +503,16 @@ export function PosView({ user, onRefresh, counterName, merchantName, showToast 
                   title="Scan barcode with device camera"
                 >
                   <span>📷 Camera</span>
+                </button>
+
+                {/* Quick Pull from Website */}
+                <button
+                  type="button"
+                  onClick={() => setPullWebsiteModalOpen(true)}
+                  className="px-3 py-1.5 bg-white hover:bg-[#E6F7EF] text-[#025033] border border-[#CAE4D8] rounded-xl text-xs font-bold flex items-center gap-1.5 shrink-0 transition"
+                  title="Pull products and images from website"
+                >
+                  <span>🌐 Pull Website</span>
                 </button>
               </div>
             </div>
@@ -416,15 +544,86 @@ export function PosView({ user, onRefresh, counterName, merchantName, showToast 
                             : 'bg-white border-[#E5EAE7] hover:border-[#025033]'
                         }`}
                       >
-                        {/* Product Image Thumbnail matching PDF Page 11 */}
-                        <div className="w-full h-24 mb-2.5 rounded-xl bg-[#FAFCF9] border border-[#E5EAE7] flex items-center justify-center relative overflow-hidden group-hover:scale-102 transition-transform">
-                          <span className="text-2xl font-black text-[#025033]/40">
-                            {p.name.slice(0, 2).toUpperCase()}
-                          </span>
-                          <span className="absolute bottom-1.5 right-1.5 text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-black/60 text-white backdrop-blur-2xs">
-                            {p.stock_qty} in stock
-                          </span>
-                        </div>
+                        {/* Product Image Thumbnail with Image Option */}
+                        {showImagesInGrid ? (
+                          <div className="w-full h-24 mb-2.5 rounded-xl bg-[#FAFCF9] border border-[#E5EAE7] flex items-center justify-center relative overflow-hidden group-hover:scale-102 transition-transform">
+                            {p.image_url ? (
+                              <img
+                                src={p.image_url}
+                                alt={p.name}
+                                className="w-full h-full object-cover"
+                                onError={(e) => {
+                                  (e.target as HTMLElement).style.display = 'none';
+                                  const parent = e.currentTarget.parentElement;
+                                  const fallback = parent?.querySelector('.pos-img-fallback');
+                                  if (fallback) (fallback as HTMLElement).classList.remove('hidden');
+                                }}
+                              />
+                            ) : null}
+                            <div
+                              className={`pos-img-fallback w-full h-full flex flex-col items-center justify-center ${
+                                p.image_url ? 'hidden' : 'flex'
+                              }`}
+                            >
+                              <span className="text-2xl font-black text-[#025033]/40">
+                                {p.name.slice(0, 2).toUpperCase()}
+                              </span>
+                              <span className="text-[9px] text-[#6B7280]/60 mt-0.5">No photo</span>
+                            </div>
+
+                            <span className="absolute bottom-1.5 right-1.5 text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-black/60 text-white backdrop-blur-2xs">
+                              {p.stock_qty} in stock
+                            </span>
+
+                            {/* Image Quick Zoom Preview Button */}
+                            {p.image_url && (
+                              <span
+                                role="button"
+                                tabIndex={0}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setImagePreviewModal({
+                                    url: p.image_url!,
+                                    name: p.name,
+                                    sku: p.sku || undefined,
+                                    price: p.selling_price_bdt,
+                                    stock: p.stock_qty,
+                                    product: p,
+                                  });
+                                }}
+                                className="absolute top-1.5 right-1.5 w-6 h-6 rounded-md bg-black/50 hover:bg-black/80 text-white flex items-center justify-center text-[10px] opacity-0 group-hover:opacity-100 transition-opacity backdrop-blur-2xs cursor-pointer"
+                                title="Zoom product image"
+                              >
+                                🔍
+                              </span>
+                            )}
+
+                            {/* Edit / Attach Photo Button */}
+                            <span
+                              role="button"
+                              tabIndex={0}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setEditImageProduct(p);
+                                setEditImageUrlInput(p.image_url || '');
+                              }}
+                              className="absolute top-1.5 left-1.5 w-6 h-6 rounded-md bg-black/50 hover:bg-black/80 text-white flex items-center justify-center text-[10px] opacity-0 group-hover:opacity-100 transition-opacity backdrop-blur-2xs cursor-pointer"
+                              title="Update or set image URL"
+                            >
+                              📷
+                            </span>
+                          </div>
+                        ) : (
+                          /* Compact Mode (when images are toggled off) */
+                          <div className="w-full flex items-center justify-between mb-2">
+                            <span className="text-[10px] font-mono text-[#6B7280]">
+                              {p.sku || `SKU-${p.id}`}
+                            </span>
+                            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-[#E6F7EF] text-[#025033]">
+                              {p.stock_qty} left
+                            </span>
+                          </div>
+                        )}
 
                         <div>
                           <div className="font-extrabold text-xs text-[#111827] line-clamp-1 group-hover:text-[#025033]">
@@ -434,9 +633,15 @@ export function PosView({ user, onRefresh, counterName, merchantName, showToast 
                             <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-[#E6F7EF] text-[#025033] border border-[#CAE4D8]">
                               from ৳{p.selling_price_bdt.toLocaleString()}
                             </span>
-                            <span className="text-[10px] text-[#6B7280]">
-                              3 sizes
-                            </span>
+                            {p.image_url ? (
+                              <span className="text-[9px] text-[#025033] font-medium flex items-center gap-0.5">
+                                <span>🌐 Photo</span>
+                              </span>
+                            ) : (
+                              <span className="text-[10px] text-[#6B7280]">
+                                3 sizes
+                              </span>
+                            )}
                           </div>
                         </div>
 
@@ -481,8 +686,24 @@ export function PosView({ user, onRefresh, counterName, merchantName, showToast 
                       {cart.map((item) => (
                         <tr key={item.product.id}>
                           <td className="py-2.5 pr-2">
-                            <div className="font-semibold text-[#111827]">{item.product.name}</div>
-                            <div className="text-[10px] text-[#6B7280]">{item.product.sku || 'SKU'}</div>
+                            <div className="flex items-center gap-2.5">
+                              {item.product.image_url ? (
+                                <img
+                                  src={item.product.image_url}
+                                  alt={item.product.name}
+                                  className="w-8 h-8 rounded-lg object-cover border border-[#E5EAE7] shrink-0"
+                                  onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
+                                />
+                              ) : (
+                                <div className="w-8 h-8 rounded-lg bg-[#E6F7EF] border border-[#CAE4D8] flex items-center justify-center text-[10px] font-bold text-[#025033] shrink-0">
+                                  {item.product.name.slice(0, 2).toUpperCase()}
+                                </div>
+                              )}
+                              <div>
+                                <div className="font-semibold text-[#111827]">{item.product.name}</div>
+                                <div className="text-[10px] text-[#6B7280]">{item.product.sku || 'SKU'}</div>
+                              </div>
+                            </div>
                           </td>
                           <td className="py-2.5 text-center">
                             <div className="inline-flex items-center border border-[#D1D5DB] rounded-lg overflow-hidden bg-white">
@@ -778,15 +999,28 @@ export function PosView({ user, onRefresh, counterName, merchantName, showToast 
             </div>
 
             <div className="py-3 border-b border-[#E5EAE7] space-y-2">
-              {receiptModalData.items.map((it, idx) => (
-                <div key={idx} className="flex justify-between">
-                  <div>
-                    <div className="font-medium text-[#111827]">{it.name}</div>
-                    <div className="text-[10px] text-[#6B7280]">{it.qty} × ৳{it.unit_price}</div>
+              {receiptModalData.items.map((it, idx) => {
+                const prod = products.find(p => p.sku === it.sku || p.name === it.name);
+                return (
+                  <div key={idx} className="flex justify-between items-center">
+                    <div className="flex items-center gap-2">
+                      {prod?.image_url && (
+                        <img
+                          src={prod.image_url}
+                          alt={it.name}
+                          className="w-7 h-7 rounded-md object-cover border border-[#E5EAE7] shrink-0"
+                          onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
+                        />
+                      )}
+                      <div>
+                        <div className="font-medium text-[#111827]">{it.name}</div>
+                        <div className="text-[10px] text-[#6B7280]">{it.qty} × ৳{it.unit_price}</div>
+                      </div>
+                    </div>
+                    <div className="font-semibold text-[#111827]">৳{it.line_total}</div>
                   </div>
-                  <div className="font-semibold text-[#111827]">৳{it.line_total}</div>
-                </div>
-              ))}
+                );
+              })}
             </div>
 
             <div className="py-3 border-b border-[#E5EAE7] space-y-1 font-medium">
@@ -1072,6 +1306,272 @@ export function PosView({ user, onRefresh, counterName, merchantName, showToast 
                 Close Scanner
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Pull Products from Website Modal with Image Option */}
+      {pullWebsiteModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-[#E5EAE7] max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-4 border-b border-[#E5EAE7]">
+              <div>
+                <h3 className="text-base font-bold text-[#025033] flex items-center gap-2">
+                  <span>🌐 Pull Products from Website</span>
+                </h3>
+                <p className="text-xs text-[#3A8067]">
+                  Import products, SKU, pricing, stock, and images for POS
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPullWebsiteModalOpen(false)}
+                className="text-[#9CA3AF] hover:text-[#111827] text-xl font-bold px-2"
+              >
+                &times;
+              </button>
+            </div>
+
+            <form onSubmit={handlePullFromWebsite} className="space-y-4 pt-4">
+              <div>
+                <label className="block text-xs font-semibold text-[#025033] mb-1.5">
+                  Store Platform
+                </label>
+                <div className="grid grid-cols-5 gap-1.5">
+                  {(['wordpress', 'shopify', 'laravel', 'daraz', 'custom'] as const).map((p) => (
+                    <button
+                      key={p}
+                      type="button"
+                      onClick={() => setPullWebsitePlatform(p)}
+                      className={`py-2 px-1 text-center rounded-xl border text-[11px] font-bold capitalize transition ${
+                        pullWebsitePlatform === p
+                          ? 'border-[#00432C] bg-[#025033] text-white shadow-xs'
+                          : 'border-[#E5EAE7] bg-[#FAFCF9] text-[#025033] hover:border-[#3A8067]'
+                      }`}
+                    >
+                      {p === 'wordpress' ? 'WooCommerce' : p}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-[#025033] mb-1">
+                  Store Website URL
+                </label>
+                <input
+                  type="text"
+                  placeholder="https://myshop.com or https://demo-woocommerce.local"
+                  value={pullWebsiteUrl}
+                  onChange={(e) => setPullWebsiteUrl(e.target.value)}
+                  className="w-full bg-[#FAFCF9] border border-[#CAE4D8] rounded-xl px-3 py-2 text-xs font-mono text-[#025033] focus:outline-none focus:ring-2 focus:ring-[#025033]"
+                />
+                <p className="text-[10px] text-[#6B7280] mt-1">
+                  Leave empty to use the store URL configured in your Integrations Hub.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-[#025033] mb-1">
+                    {pullWebsitePlatform === 'shopify' ? 'Admin Access Token' : 'API Key / Token'}
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Optional / pre-saved"
+                    value={pullWebsiteApiKey}
+                    onChange={(e) => setPullWebsiteApiKey(e.target.value)}
+                    className="w-full bg-[#FAFCF9] border border-[#CAE4D8] rounded-xl px-3 py-2 text-xs font-mono text-[#025033] focus:outline-none focus:ring-2 focus:ring-[#025033]"
+                  />
+                </div>
+                {pullWebsitePlatform !== 'shopify' && (
+                  <div>
+                    <label className="block text-xs font-semibold text-[#025033] mb-1">
+                      API Secret
+                    </label>
+                    <input
+                      type="password"
+                      placeholder="Optional / pre-saved"
+                      value={pullWebsiteApiSecret}
+                      onChange={(e) => setPullWebsiteApiSecret(e.target.value)}
+                      className="w-full bg-[#FAFCF9] border border-[#CAE4D8] rounded-xl px-3 py-2 text-xs font-mono text-[#025033] focus:outline-none focus:ring-2 focus:ring-[#025033]"
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* IMAGE OPTION TOGGLE */}
+              <div className="p-3.5 bg-[#E6F7EF]/60 border border-[#CAE4D8] rounded-2xl flex items-center justify-between">
+                <div className="pr-3">
+                  <div className="text-xs font-bold text-[#025033] flex items-center gap-1.5">
+                    <span>🖼️ Import Product Images</span>
+                    <span className="text-[10px] px-1.5 py-0.2 bg-[#025033] text-white rounded font-mono font-bold">Recommended</span>
+                  </div>
+                  <p className="text-[11px] text-[#3A8067] mt-0.5">
+                    Pull photos and thumbnail images from website for visual counter cards in POS.
+                  </p>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                  <input
+                    type="checkbox"
+                    checked={importImages}
+                    onChange={(e) => setImportImages(e.target.checked)}
+                    className="sr-only peer"
+                  />
+                  <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#025033]"></div>
+                </label>
+              </div>
+
+              <div className="flex gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setPullWebsiteModalOpen(false)}
+                  className="flex-1 py-2.5 text-xs font-semibold text-[#4B5563] bg-[#F3F4F6] rounded-xl hover:bg-[#E5E7EB]"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isPullingWebsite}
+                  className="flex-1 py-2.5 text-xs font-bold text-white bg-[#025033] hover:bg-[#033E28] rounded-xl shadow-xs flex items-center justify-center gap-2"
+                >
+                  {isPullingWebsite ? (
+                    <>
+                      <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      <span>Pulling with Images...</span>
+                    </>
+                  ) : (
+                    <span>Pull Inventory &amp; Images</span>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Product Image Lightbox Modal */}
+      {imagePreviewModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs">
+          <div className="bg-white rounded-3xl max-w-md w-full p-5 shadow-2xl border border-[#E5EAE7] overflow-hidden">
+            <div className="flex items-center justify-between pb-3 border-b border-[#E5EAE7]">
+              <div>
+                <h3 className="text-base font-bold text-[#111827]">{imagePreviewModal.name}</h3>
+                {imagePreviewModal.sku && (
+                  <p className="text-xs text-[#6B7280] font-mono">{imagePreviewModal.sku}</p>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => setImagePreviewModal(null)}
+                className="text-[#9CA3AF] hover:text-[#111827] text-xl font-bold px-2"
+              >
+                &times;
+              </button>
+            </div>
+
+            <div className="my-4 rounded-2xl overflow-hidden bg-[#FAFCF9] border border-[#E5EAE7] max-h-72 flex items-center justify-center">
+              <img
+                src={imagePreviewModal.url}
+                alt={imagePreviewModal.name}
+                className="w-full h-full max-h-72 object-contain"
+              />
+            </div>
+
+            <div className="flex items-center justify-between pt-2">
+              <div>
+                {imagePreviewModal.price !== undefined && (
+                  <span className="text-lg font-black text-[#025033]">
+                    ৳{imagePreviewModal.price.toLocaleString()}
+                  </span>
+                )}
+                {imagePreviewModal.stock !== undefined && (
+                  <span className="text-xs text-[#6B7280] ml-2 font-medium">
+                    ({imagePreviewModal.stock} in stock)
+                  </span>
+                )}
+              </div>
+              {imagePreviewModal.product && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    addToCart(imagePreviewModal.product!);
+                    if (showToast) showToast(`Added ${imagePreviewModal.name} to cart`, 'success');
+                    setImagePreviewModal(null);
+                  }}
+                  className="px-4 py-2 bg-[#025033] hover:bg-[#033E28] text-white text-xs font-bold rounded-xl shadow-xs"
+                >
+                  + Add to Cart
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Product Image URL Modal */}
+      {editImageProduct && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+          <div className="bg-white rounded-3xl max-w-sm w-full p-5 shadow-2xl border border-[#E5EAE7]">
+            <div className="flex items-center justify-between pb-3 border-b border-[#E5EAE7]">
+              <div>
+                <h3 className="text-base font-bold text-[#025033]">Product Image URL</h3>
+                <p className="text-xs text-[#6B7280] truncate max-w-[240px]">{editImageProduct.name}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditImageProduct(null)}
+                className="text-[#9CA3AF] hover:text-[#111827] text-xl font-bold px-2"
+              >
+                &times;
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveProductImage} className="space-y-4 pt-3">
+              <div>
+                <label className="block text-xs font-semibold text-[#374151] mb-1">
+                  Image Web URL (HTTPS)
+                </label>
+                <input
+                  type="url"
+                  placeholder="https://example.com/images/product.jpg"
+                  value={editImageUrlInput}
+                  onChange={(e) => setEditImageUrlInput(e.target.value)}
+                  className="w-full bg-[#FAFCF9] border border-[#CAE4D8] rounded-xl px-3 py-2 text-xs font-mono text-[#025033] focus:outline-none focus:ring-2 focus:ring-[#025033]"
+                />
+                <p className="text-[10px] text-[#6B7280] mt-1">
+                  Paste any web photo link or leave blank to clear the image.
+                </p>
+              </div>
+
+              {editImageUrlInput && (
+                <div className="w-full h-28 rounded-xl bg-[#FAFCF9] border border-[#E5EAE7] overflow-hidden flex items-center justify-center">
+                  <img
+                    src={editImageUrlInput}
+                    alt="Preview"
+                    className="w-full h-full object-cover"
+                    onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
+                  />
+                </div>
+              )}
+
+              <div className="flex gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setEditImageProduct(null)}
+                  className="flex-1 py-2 text-xs font-semibold text-[#4B5563] bg-[#F3F4F6] rounded-xl hover:bg-[#E5E7EB]"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSavingImage}
+                  className="flex-1 py-2 text-xs font-bold text-white bg-[#025033] hover:bg-[#033E28] rounded-xl shadow-xs"
+                >
+                  {isSavingImage ? 'Saving...' : 'Save Image'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

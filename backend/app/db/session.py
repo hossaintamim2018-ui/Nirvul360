@@ -98,6 +98,11 @@ def open_db(target: Optional[str] = None):
                     if schema_sql:
                         cur.execute(schema_sql)
                         print("Supabase schema initialized cleanly.")
+                else:
+                    try:
+                        cur.execute("ALTER TABLE products ADD COLUMN IF NOT EXISTS image_url TEXT;")
+                    except Exception:
+                        pass
                         print("Supabase schema initialized cleanly.")
             
             _tx_depth = 0
@@ -132,6 +137,11 @@ def open_db(target: Optional[str] = None):
     else:
         try:
             _db_conn.execute("ALTER TABLE sessions ADD COLUMN active_merchant_id INTEGER REFERENCES merchants(id);")
+            _db_conn.commit()
+        except Exception:
+            pass
+        try:
+            _db_conn.execute("ALTER TABLE products ADD COLUMN image_url TEXT;")
             _db_conn.commit()
         except Exception:
             pass

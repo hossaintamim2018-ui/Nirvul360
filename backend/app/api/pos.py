@@ -108,6 +108,7 @@ async def list_pos_products(
             "in_stock": stock > 0,
             "active": True,
             "source": p.get("source") or "store",
+            "image_url": p.get("image_url"),
         })
 
     return {"products": items, "total": len(items)}
@@ -341,3 +342,51 @@ async def list_pos_orders(
             "total_pos_orders": len(enriched_orders),
         }
     }
+
+class PosPullWebsiteInput(BaseModel):
+    platform: Optional[str] = None
+    store_url: Optional[str] = None
+    api_key: Optional[str] = None
+    api_secret: Optional[str] = None
+    import_images: Optional[bool] = True
+
+class UpdateProductImageInput(BaseModel):
+    image_url: Optional[str] = None
+
+@router.post("/pull-website")
+async def pos_pull_website(
+    data: PosPullWebsiteInput,
+    current: Dict[str, Any] = Depends(get_current_user)
+):
+    """
+    Direct POS-level action to sync / pull products from connected store website
+    with option to import product images for POS tile display.
+    """
+    from app.api.integrations import execute_pull_inventory, PullInventoryInput
+    input_data = PullInventoryInput(
+        platform=data.platform,
+        store_url=data.store_url,
+        api_key=data.api_key,
+        api_secret=data.api_secret,
+        import_images=data.import_images,
+    )
+    res = await execute_pull_inventory(current["merchantId"], current["actor"], input_data)
+    return res
+
+@router.patch("/products/{product_id}/image")
+async def pos_update_product_image(
+    product_id: int,
+    data: UpdateProductImageInput,
+    current: Dict[str, Any] = Depends(get_current_user)
+):
+    """
+    Update or set product image URL directly in POS system.
+    """
+    m_id = current["merchantId"]
+    p = one("SELECT id FROM products WHERE id = ? AND merchant_id = ?", product_id, m_id)
+    if not p:
+        raise HTTPException(status_code=404, detail="Product not found")
+
+    new_img = (data.image_url or "").strip() or None
+    update("products", product_id, {"image_url": new_img, "updated_at": now_iso()})
+    return {"ok": True, "product_id": product_id, "image_url": new_img}

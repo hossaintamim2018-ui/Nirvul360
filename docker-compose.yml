@@ -8,16 +8,15 @@ services:
     ports:
       - "8000:8000"
     restart: unless-stopped
+
   frontend:
-    image: node:20-alpine
-    working_dir: /app
-    volumes:
-      - ./frontend:/app
-    command: sh -c "npm ci && npm run build && npm start"
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    environment:
+      - BACKEND_URL=http://backend:8000
     ports:
       - "3000:3000"
-    environment:
-      - NEXT_PUBLIC_API_URL=http://localhost:8000
     depends_on:
       - backend
     restart: unless-stopped

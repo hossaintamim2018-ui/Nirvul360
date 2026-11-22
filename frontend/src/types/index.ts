@@ -77,6 +77,7 @@ export interface Product {
   source?: string;
   margin?: number | null;
   created_at?: string;
+  image_url?: string | null;
 }
 
 export interface CashAccount {
@@ -683,6 +684,7 @@ export interface PosProductItem {
   in_stock: boolean;
   active: boolean;
   source?: string;
+  image_url?: string | null;
 }
 
 export interface PosCartItem {

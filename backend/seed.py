@@ -151,6 +151,7 @@ def seed():
         'selling_price': 65000, # ৳650
         'purchase_price': 28000, # ৳280
         'stock_qty': 100,
+        'image_url': 'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=400&q=80',
     }, ctx)
 
     set_price(m_id, shirt, 30000, {
@@ -167,6 +168,7 @@ def seed():
         'selling_price': 220000, # ৳2,200
         'purchase_price': 110000, # ৳1,100
         'stock_qty': 45,
+        'image_url': 'https://images.unsplash.com/photo-1583391733956-3750e0ff4e8b?w=400&q=80',
     }, ctx)
 
     chino = upsert_product(m_id, {
@@ -176,6 +178,7 @@ def seed():
         'selling_price': 145000, # ৳1,450
         'purchase_price': 75000, # ৳750
         'stock_qty': 50,
+        'image_url': 'https://images.unsplash.com/photo-1473966968600-fa801b869a1a?w=400&q=80',
     }, ctx)
 
     shawl = upsert_product(m_id, {
@@ -185,6 +188,7 @@ def seed():
         'selling_price': 180000, # ৳1,800
         'purchase_price': 90000, # ৳900
         'stock_qty': 30,
+        'image_url': 'https://images.unsplash.com/photo-1608256246200-53e635b5b65f?w=400&q=80',
     }, ctx)
 
     # Missing purchase price product (Rule 11)
@@ -194,6 +198,7 @@ def seed():
         'name': 'Graphic Hoodie - Black Edition',
         'selling_price': 165000, # ৳1,650
         'stock_qty': 25,
+        'image_url': 'https://images.unsplash.com/photo-1556905055-8f358a7a47b2?w=400&q=80',
     }, ctx)
 
     print("Products, cash accounts, and suppliers created.")

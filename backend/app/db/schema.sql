@@ -81,6 +81,7 @@ CREATE TABLE products (
   sku           TEXT,
   name          TEXT NOT NULL,
   selling_price INTEGER,
+  image_url     TEXT,
   active        INTEGER NOT NULL DEFAULT 1,
   source        TEXT NOT NULL,
   created_by    TEXT NOT NULL,
