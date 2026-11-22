@@ -15,6 +15,8 @@ sys.path.insert(0, str(backend_dir))
 
 from fastapi.testclient import TestClient
 from app.main import app
+from app.db.session import one, update, insert
+from app.domain.merchants import hash_password, create_user
 
 client = TestClient(app)
 
@@ -22,6 +24,18 @@ def test_all():
     print("=" * 70)
     print("AUDITING NIRVUL360 BACKEND API ENDPOINTS FOR FRONTEND VIEWS")
     print("=" * 70)
+
+    # Ensure owner@demo.bd exists with password123 and agency_owner role
+    u = one("SELECT * FROM users WHERE lower(email) = 'owner@demo.bd'")
+    if not u:
+        create_user(1, {
+            'name': 'Tamim Ahmed',
+            'email': 'owner@demo.bd',
+            'role': 'agency_owner',
+            'password': 'password123'
+        })
+    else:
+        update("users", u["id"], {"password_hash": hash_password("password123"), "role": "agency_owner"})
 
     # 1. Login as agency owner (Merchant 1: Tamim Ahmed: owner@demo.bd)
     login_res = client.post("/api/auth/login", json={
@@ -133,6 +147,17 @@ def test_all():
     print(f"[OK] Screen 5 (Settings): {len(cash_res.json().get('accounts', []))} cash accounts")
 
     # 15. Admin Console (Login as Super Admin)
+    sa = one("SELECT * FROM users WHERE lower(email) = 'superadmin@gross.bd'")
+    if not sa:
+        create_user(1, {
+            'name': 'Super Admin',
+            'email': 'superadmin@gross.bd',
+            'role': 'super_admin',
+            'password': 'password123'
+        })
+    else:
+        update("users", sa["id"], {"password_hash": hash_password("password123"), "role": "super_admin"})
+
     super_login = client.post("/api/auth/login", json={
         "identifier": "superadmin@gross.bd",
         "password": "password123"

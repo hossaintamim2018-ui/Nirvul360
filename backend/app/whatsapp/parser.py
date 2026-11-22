@@ -138,8 +138,11 @@ async def parse_message_llm(text: str) -> Optional[Dict[str, Any]]:
                 valid_heads = {'packaging', 'salary', 'rent', 'utilities', 'software', 'transport', 'ad_spend', 'other_expense'}
                 if head not in valid_heads:
                     head = 'other_expense'
+                intent = parsed.get('intent', 'expense')
+                if intent not in ('expense', 'withdrawal', 'price_change', 'supplier_payment'):
+                    intent = 'expense'
                 return {
-                    'intent': parsed.get('intent', 'expense'),
+                    'intent': intent,
                     'amount': amt_poisha,
                     'head': head,
                     'note': parsed.get('note') or text,

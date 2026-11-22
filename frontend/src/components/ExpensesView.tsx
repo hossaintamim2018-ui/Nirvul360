@@ -234,7 +234,7 @@ export function ExpensesView({ currentUser, onNavigate, onOpenAddExpenseModal }:
 
   const metaSyncDate = summary?.sync_status?.meta_last_synced_at || '—';
   const waLastDate = summary?.sync_status?.whatsapp_last_entry_at || '—';
-  const totalOperatingPoisha = summary?.total_operating_expenses_poisha ?? 0;
+  const totalOperatingPoisha = summary?.total_operating_expenses_poisha || 0;
   const dateRangeStr = formatDateRange(summary?.from_date, summary?.to_date);
 
   // Determine current user display name for manual attribution
@@ -614,7 +614,7 @@ export function ExpensesView({ currentUser, onNavigate, onOpenAddExpenseModal }:
                   </div>
                 ))
               ) : (
-                <div className="text-[#9CA3AF] text-xs py-1">No withdrawals recorded this month.</div>
+                <div className="text-[#9CA3AF] text-xs py-1">No withdrawals taken this month.</div>
               )}
             </div>
 
