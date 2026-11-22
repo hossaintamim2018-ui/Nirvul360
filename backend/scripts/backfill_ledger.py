@@ -5,27 +5,11 @@ Repairs databases where orders exist WITHOUT the double-entry journals the
 accounting engine posts (this happens when data is inserted by direct SQL,
 e.g. supabase/seed.sql, instead of going through the domain layer).
 
-What it does (all through the official domain functions, so postings obey every
-non-negotiable double-entry rule):
-  1. Restores order_items that the raw-SQL seed left out (keyed by external_id).
-  2. For every order whose money was never posted (no live delivery journals):
-     resets it to 'placed', then re-applies its real status via apply_status —
-     which books sales, COGS, courier receivable, stock movements, and courier
-     charges for returned parcels.
-  3. Posts opening capital and the operating expenses (packaging, ads, misc)
-     so the P&L and cash position are complete — only when the merchant has none.
-  4. Commits one real Steadfast settlement sheet (idempotent) so the COD
-     settled / courier fee numbers come from the settlement engine itself.
-  5. Runs the exception scanner, then verifies: every journal balances to
-     exactly zero, and reports P&L + cash per merchant.
-
-Safe to re-run: every step is either verified before writing or idempotent.
-
 Usage:
-  python backfill_ledger.py            # repair the current database
-  python -c "from backfill_ledger import backfill; backfill()"
+  python backend/scripts/backfill_ledger.py
 """
 import sys
+import hashlib
 from pathlib import Path
 
 # Windows consoles default to cp1252 which cannot print ৳/bengali — force UTF-8.
@@ -35,7 +19,10 @@ if hasattr(sys.stdout, "reconfigure"):
     except Exception:
         pass
 
-BACKEND_DIR = Path(__file__).resolve().parent / "backend"
+SCRIPT_DIR = Path(__file__).resolve().parent
+BACKEND_DIR = SCRIPT_DIR.parent
+ROOT_DIR = BACKEND_DIR.parent
+
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
@@ -123,7 +110,6 @@ def backfill(skip_demo_expenses: bool = False) -> dict:
             ctx = {'date': ctx_date, 'source': 'system', 'actor': 'backfill'}
             if target == 'returned':
                 # The courier delivered & then picked it up — both directions cost money
-                # (this also marks the order processed, so re-runs never double-post).
                 ctx['charges'] = {'delivery_charge': o['shipping_charge'] // 2, 'return_fee': o['shipping_charge'] // 2}
 
             update('orders', o['id'], {'status': 'placed', 'posting_state': 'none'})
@@ -196,7 +182,6 @@ def backfill(skip_demo_expenses: bool = False) -> dict:
                         'Settlement Date': d['delivered_date'],
                     })
                 prepared = prepare_records(raw_sheet, 'steadfast')
-                import hashlib
                 sha = hashlib.sha256(str(raw_sheet).encode()).hexdigest()
                 result = commit_settlement(m_id, prepared['rows'], 'steadfast', 'backfill_steadfast.csv', sha,
                                            {'source': 'courier_sheet_upload', 'actor': ctx_actor})
@@ -207,7 +192,6 @@ def backfill(skip_demo_expenses: bool = False) -> dict:
         exceptions_domain.scan_merchant(m_id)
 
         # --- 6. Verify ----------------------------------------------------------
-        from app.domain.accounts import PL_SECTIONS
         from app.domain.reports import profit_and_loss, cash_position
 
         unbalanced = all(

@@ -8,17 +8,19 @@ from pathlib import Path
 import uvicorn
 from dotenv import load_dotenv
 
-# Auto-load .env from root project directory
-root_dir = Path(__file__).resolve().parent
+backend_dir = Path(__file__).resolve().parent
+root_dir = backend_dir.parent
+
+# Load .env from root or backend directory
 env_path = root_dir / ".env"
 if env_path.exists():
     load_dotenv(dotenv_path=env_path, override=True)
 else:
-    load_dotenv(override=True)
+    load_dotenv(dotenv_path=backend_dir / ".env", override=True)
 
 # Ensure backend is in pythonpath
-backend_dir = root_dir / "backend"
-sys.path.insert(0, str(backend_dir))
+if str(backend_dir) not in sys.path:
+    sys.path.insert(0, str(backend_dir))
 
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 8000))

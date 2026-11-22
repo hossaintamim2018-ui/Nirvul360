@@ -2,20 +2,28 @@
 nirvul360 — Supabase Migration & Seeding CLI.
 Run this script to initialize and migrate tables and demo data directly to Supabase PostgreSQL.
 Usage:
-  python migrate_to_supabase.py
+  python backend/scripts/migrate_to_supabase.py
 """
 import os
 import sys
 from pathlib import Path
 from dotenv import load_dotenv
 
-# Load .env
-root_dir = Path(__file__).resolve().parent
-load_dotenv(root_dir / ".env", override=True)
+script_dir = Path(__file__).resolve().parent
+backend_dir = script_dir.parent
+root_dir = backend_dir.parent
 
-# Add backend to sys.path
-backend_dir = root_dir / "backend"
-sys.path.insert(0, str(backend_dir))
+# Load .env from root or backend
+if (root_dir / ".env").exists():
+    load_dotenv(root_dir / ".env", override=True)
+elif (backend_dir / ".env").exists():
+    load_dotenv(backend_dir / ".env", override=True)
+
+# Add backend and scripts to sys.path
+if str(backend_dir) not in sys.path:
+    sys.path.insert(0, str(backend_dir))
+if str(script_dir) not in sys.path:
+    sys.path.insert(0, str(script_dir))
 
 def run_migration():
     pg_url = os.getenv("DATABASE_URL") or os.getenv("SUPABASE_DB_URL") or os.getenv("SUPABASE_POSTGRES_URL")
@@ -36,7 +44,7 @@ def run_migration():
     print("=" * 70)
     print("NIRVUL360 — SUPABASE CLOUD DATABASE MIGRATION")
     print("=" * 70)
-    print(f"Connecting to Supabase PostgreSQL...")
+    print("Connecting to Supabase PostgreSQL...")
 
     try:
         import psycopg2
@@ -56,6 +64,8 @@ def run_migration():
 
     # 2. Apply Schema
     schema_path = root_dir / "supabase" / "schema.sql"
+    if not schema_path.exists():
+        schema_path = backend_dir / "app" / "db" / "schema.sql"
     if not schema_path.exists():
         print(f"[X] Schema file not found at: {schema_path}")
         sys.exit(1)
@@ -91,15 +101,15 @@ def run_migration():
     try:
         from backfill_ledger import backfill
         rep = backfill()
-        if rep['unbalanced']:
+        if rep.get('unbalanced'):
             print(f"[!] Backfill verification: {rep['unbalanced']} unbalanced journal(s)!")
         else:
             print("[OK] Ledger backfill complete — every journal balances to zero.")
-        for m in rep['merchants']:
+        for m in rep.get('merchants', []):
             print(f"     {m['name']}: sales ৳{m['gross_sales'] / 100:,.0f} • "
                   f"net profit ৳{m['net_profit'] / 100:,.0f} • cash ৳{m['cash'] / 100:,.0f}")
     except Exception as e:
-        print(f"[!] Ledger backfill failed (run `python backfill_ledger.py` later): {e}")
+        print(f"[!] Ledger backfill failed: {e}")
 
     # 4. Verification table counts
     print("\nSupabase Table Verification:")

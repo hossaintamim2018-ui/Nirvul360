@@ -1,66 +1,102 @@
-# nirvul360 — Accounting Software for Bangladeshi E-commerce Merchants
+# Nirvul360 — Accounting Engine & POS for Bangladeshi E-Commerce
 
-## Project layout
+Automated double-entry accounting and operating platform purpose-built for Bangladeshi e-commerce and f-commerce merchants (FastAPI + Next.js 15 + Supabase PostgreSQL).
 
-- `backend/` — FastAPI HTTP API, domain rules, database access and integrations.
-  - `app/` — application code (api, domain, db, whatsapp, lib).
-  - `tests/` — automated backend tests (pytest).
-  - `data/` — local SQLite runtime data (dev only, not source).
-- `frontend/` — Next.js (App Router) web dashboard.
-- `supabase/` — Postgres schema + seed for production (Supabase).
-- `Dockerfile.backend`, `docker-compose.yml` — containerized deployment.
+---
 
-## Quick start (local dev)
+## Project Structure
 
-Backend:
-```bash
-cd backend
-pip install -r requirements.txt
-python -m uvicorn app.main:app --reload --port 8000
-# first run auto-seeds SQLite demo data
+```text
+.
+├── .github/workflows/ci.yml     # Automated CI (lint, tests, build)
+├── backend/                     # FastAPI backend
+│   ├── app/                     # App routers, domain rules, DB services
+│   ├── scripts/                 # Migration & backfill scripts
+│   ├── tests/                   # 28+ test suites
+│   ├── Dockerfile               # Backend container definition
+│   ├── pyproject.toml           # Python tool configurations
+│   ├── requirements.txt         # Pinned Python dependencies
+│   └── run_backend.py           # Backend server runner
+├── frontend/                    # Next.js 15 App Router frontend
+│   ├── src/                     # React components, POS views, and routes
+│   ├── tests/                   # Smoke tests
+│   ├── Dockerfile               # Multi-stage production container
+│   ├── next.config.ts           # Next.js config with backend API rewrite
+│   └── package.json             # Frontend dependencies
+├── supabase/                    # Supabase database config
+│   ├── migrations/              # Versioned SQL migrations
+│   ├── schema.sql               # Base canonical schema
+│   └── seed.sql                 # Seed database records
+├── docs/                        # Architecture, test, and handover guides
+│   ├── developer-handover.md    # System specification
+│   ├── developer-handover.pdf   # Reference PDF
+│   ├── TEST_INFRA.md            # Test infrastructure details
+│   └── WHATSAPP_INTEGRATION_GUIDE.md
+├── docker-compose.yml           # Multi-service local orchestrator
+├── vercel.json                  # Frontend cloud deployment routing
+├── package.json                 # Monorepo root workspace orchestrator
+├── .env.example                 # Environment configuration template
+├── LICENSE                      # License details
+├── SECURITY.md                  # Security vulnerability reporting
+└── CONTRIBUTING.md              # Contribution and PR guidelines
 ```
 
-Frontend:
+---
+
+## Quickstart (Local Development)
+
+### 1. Prerequisites
+- Python 3.11+
+- Node.js 20+
+- npm or pnpm
+
+### 2. Environment Setup
+Copy the sample environment file and configure variables:
 ```bash
-cd frontend
-npm ci
-npm run dev   # http://localhost:3000
+cp .env.example .env
 ```
 
-Root shortcuts (if present): `npm run dev:backend`, `npm run dev:frontend`.
+### 3. Running Services
 
-## Environment
-
-Copy `.env.example` to `.env` and fill in. Key variables:
-
-- `DATABASE_URL` / `SUPABASE_DB_URL` — Postgres connection (production). Unset → local SQLite (dev/test).
-- `SUPABASE_URL`, `SUPABASE_KEY` — Supabase REST (optional).
-- `CORS_ORIGINS` — comma list (default `http://localhost:3000`).
-- `COOKIE_SECURE` — `true` in production (HTTPS).
-- `COURIER_WEBHOOK_SECRET` — required for courier webhooks.
-- `WHATSAPP_VERIFY_TOKEN` — required for WhatsApp Cloud webhook verification.
-- `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID` — WhatsApp Cloud API (optional until configured).
-- `META_ADS_TOKEN`, `META_ADS_ACCOUNT_ID` — Meta Ads API (optional until configured).
-- `WHATSAPP_SCHEDULER_ENABLED` — `false` by default.
-
-## Deploy (production)
-
-1. Provision Supabase Postgres; run `supabase/schema.sql` then `supabase/seed.sql` (or use `migrate_to_supabase.py`).
-2. Set `.env` with `DATABASE_URL` pointing at Supabase and secrets.
-3. `docker compose up -d --build` (backend on :8000).
-4. Deploy `frontend` to Vercel; set `NEXT_PUBLIC_API_URL` to the backend URL.
-
-## Verification
-
+From the root directory:
 ```bash
-cd backend && python -m pytest tests -q   # all tests must pass
-cd frontend && npm run build           # must succeed
+# Start backend server (port 8000)
+npm run dev:backend
+
+# Start frontend application (port 3000)
+npm run dev:frontend
 ```
 
-Acceptance criteria (12 checks) are encoded as tests in `backend/tests/` (engine, exceptions, settlements, prices, hierarchy, whatsapp, api, integrations, security).
+Alternatively, run via Docker Compose:
+```bash
+docker compose up --build
+```
 
-## Notes
+---
 
-- All money is stored in poisha (integers). Never float.
-- Six non-negotiable data rules are enforced in `app/domain/`: versioned purchase prices, exception queue, short-payment reason codes, WhatsApp confirmation before write, FX rate stored on the transaction row, source + audit trail on every ledger row.
-- Owner withdrawals reduce cash, never net profit. Profit and cash are reported separately.
+## Testing & Quality Assurance
+
+Run backend and frontend suites:
+```bash
+# Run all tests
+npm test
+
+# Run backend pytest suite directly
+pytest backend/tests/ -v
+
+# Run frontend smoke verification
+npm run test:frontend
+
+# Build frontend for production
+npm run build:frontend
+```
+
+---
+
+## Core Domain Rules
+
+1. **Strict Double-Entry**: Every transaction balances `debit == credit`.
+2. **Immutable Price History**: Historical purchase costs are never overwritten.
+3. **Multi-Tenant Isolation**: RLS and explicit tenant boundaries across all tables.
+4. **Poisha Precision**: Currency values stored as integers (poisha) to avoid floating-point drift.
+5. **Accrual-to-Cash Courier Settlements**: Complete reconciliation of COD remittances and courier deduction fees.
